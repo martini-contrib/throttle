@@ -28,19 +28,23 @@ const (
 )
 
 type Options struct {
-	// The maximum amount of requests the client can make per day
+	// The status code to be returned for throttled requests
+	// Defaults to 429 Too Many Requests
 	StatusCode int
 
-	// The maximum amount of requests the client can make per hour
+	// The message to be returned as the body of throttled requests
 	Message string
 	
-	// The time the client has to wait between making requests
+	// The function used to identify the requester
+	// Defaults to IP identification
 	IdentificationFunction func(*http.Request)string
 	
 	// The key prefix to use in any key value store
+	// defaults to "throttle"
 	KeyPrefix string
 	
 	// The store to use
+	// defaults to a simple concurrent-safe map[string]string
 	Store KeyValueStorer
 }
 
