@@ -88,7 +88,7 @@ type accessCount struct {
 
 // Determine if the count is still fresh
 func (r accessCount) IsFresh() bool {
-	return time.Since(r.Start) < r.Duration
+	return time.Now().UTC().Sub(r.Start) < r.Duration
 }
 
 // Increment the count when fresh, or reset and then increment when stale
@@ -97,7 +97,7 @@ func (r *accessCount) Increment() {
 		r.Count++
 	} else {
 		r.Count = 1
-		r.Start = time.Now()
+		r.Start = time.Now().UTC()
 	}
 }
 
@@ -114,7 +114,7 @@ func (r *accessCount) GetCount() uint64 {
 func newAccessCount(duration time.Duration) *accessCount {
 	return &accessCount{
 		0,
-		time.Now(),
+		time.Now().UTC(),
 		duration,
 	}
 }

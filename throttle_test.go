@@ -25,8 +25,8 @@ func expectSame(t *testing.T, a interface{}, b interface{}) {
 	}
 }
 
-func expectBiggerOrEqual(t *testing.T, a int64, b int64) {
-	if a < b {
+func expectApproximateTimestamp(t *testing.T, a int64, b int64) {
+	if a != b && a != b + 1 {
 		t.Errorf("Expected %v to be bigger than or equal to %v", b, a)
 	}
 }
@@ -42,6 +42,10 @@ func expectStatusCode(t *testing.T, expectedStatusCode int, actualStatusCode int
 	if actualStatusCode != expectedStatusCode {
 		t.Errorf("Expected StatusCode %d, but received %d", expectedStatusCode, actualStatusCode)
 	}
+}
+
+func utcTimestamp() int64 {
+	return time.Now().Unix()
 }
 
 type Expectation struct {
@@ -104,7 +108,7 @@ func testResponses(t *testing.T, m *martini.ClassicMartini, expectations ...*Exp
 		if err != nil {
 			t.Errorf(err.Error())
 		}
-		expectBiggerOrEqual(t, resetTime, expectation.RateLimitReset)
+		expectApproximateTimestamp(t, resetTime, expectation.RateLimitReset)
 	}
 }
 
@@ -115,21 +119,21 @@ func TestTimeLimit(t *testing.T) {
 		"",
 		"1",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		StatusTooManyRequests,
 		"Too Many Requests",
 		"1",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		http.StatusOK,
 		"",
 		"1",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		10 * time.Millisecond,
 	})
 }
@@ -145,21 +149,21 @@ func TestTimeLimitWithOptions(t *testing.T) {
 		"",
 		"1",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		http.StatusBadRequest,
 		"Server says no",
 		"1",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		http.StatusOK,
 		"",
 		"1",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		10 * time.Millisecond,
 	})
 }
@@ -171,28 +175,28 @@ func TestRateLimit(t *testing.T) {
 		"",
 		"2",
 		"1",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		http.StatusOK,
 		"",
 		"2",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		StatusTooManyRequests,
 		"Too Many Requests",
 		"2",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		http.StatusOK,
 		"",
 		"2",
 		"1",
-		time.Now().Unix(),
+		utcTimestamp(),
 		10 * time.Millisecond,
 	})
 }
@@ -207,28 +211,28 @@ func TestRateLimitWithOptions(t *testing.T) {
 		"",
 		"2",
 		"1",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		http.StatusOK,
 		"",
 		"2",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		http.StatusBadRequest,
 		"Server says no",
 		"2",
 		"0",
-		time.Now().Unix(),
+		utcTimestamp(),
 		0,
 	}, &Expectation{
 		http.StatusOK,
 		"",
 		"2",
 		"1",
-		time.Now().Unix(),
+		utcTimestamp(),
 		10 * time.Millisecond,
 	})
 }
