@@ -111,7 +111,7 @@ The default state storage is in memory via a concurrent-safe `map[string][]byte`
 - X-RateLimit-Remaining: The number of requests remaining in the current rate limit window
 - X-RateLimit-Reset: The time at which the current rate limit window resets in [UTC epoch seconds](http://en.wikipedia.org/wiki/Unix_time)
 
-No ``Retry-After`` Header is added to the response, since the ``X-RateLimit-Reset`` makes them redundant. Also it is not recommended to use a 503 Service Unavailable Status Code when Limiting the rate of requests, since the 5xx Status Code Family indicates an error on the servers side.
+No ``Retry-After`` Header is added to the response, since the ``X-RateLimit-Reset`` makes it redundant. Also it is not recommended to use a 503 Service Unavailable Status Code when Limiting the rate of requests, since the 5xx Status Code Family indicates an error on the servers side.
 
 ## Authors
 
