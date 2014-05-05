@@ -15,7 +15,7 @@ const (
 // A very simple implementation of a key value store (a concurrent safe map)
 type MapStore struct {
 	*sync.RWMutex
-	data map[string][]byte
+	data    map[string][]byte
 	binding FreshnessInformer
 }
 
@@ -41,7 +41,7 @@ func (s *MapStore) Set(key string, value []byte) error {
 	s.Lock()
 	s.data[key] = value
 	s.Unlock()
-	
+
 	return nil
 }
 
@@ -71,19 +71,19 @@ func (s *MapStore) Read(key string) (FreshnessInformer, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	byteBufferString := bytes.NewBuffer(byteArray)
 	var arbitraryStructure interface{}
 	if err := json.NewDecoder(byteBufferString).Decode(&arbitraryStructure); err != nil {
 		return nil, err
 	}
-	
+
 	for k, v := range arbitraryStructure.(map[string]interface{}) {
 		if field := reflect.ValueOf(s.binding).FieldByName(k); field.IsValid() && field.CanSet() {
 			field.Set(reflect.ValueOf(v))
 		}
 	}
-	
+
 	return s.binding, err
 }
 
@@ -102,11 +102,11 @@ func (s *MapStore) Clean() {
 // Simple cleanup mechanism, cleaning the store every 15 minutes
 func (s *MapStore) CleanEvery(cleaningPeriod time.Duration) {
 	c := time.Tick(cleaningPeriod)
-	
+
 	for {
 		select {
-			case <-c:
-				s.Clean()
+		case <-c:
+			s.Clean()
 		}
 	}
 }
@@ -118,11 +118,11 @@ func NewMapStore(binding FreshnessInformer, options ...*MapStoreOptions) *MapSto
 		make(map[string][]byte),
 		binding,
 	}
-	
+
 	o := newMapStoreOptions(options)
-	
+
 	go s.CleanEvery(o.CleaningPeriod)
-	
+
 	return s
 }
 
@@ -131,14 +131,14 @@ func newMapStoreOptions(options []*MapStoreOptions) *MapStoreOptions {
 	o := &MapStoreOptions{
 		defaultCleaningPeriod,
 	}
-	
+
 	if len(options) == 0 {
 		return o
 	}
-	
+
 	if options[0].CleaningPeriod != 0 {
 		o.CleaningPeriod = options[0].CleaningPeriod
 	}
-	
+
 	return o
 }

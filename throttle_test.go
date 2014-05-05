@@ -3,19 +3,19 @@ package throttle
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
-	"reflect"
-	"strings"
-	"strconv"
-	"regexp"
-	
+
 	"github.com/go-martini/martini"
 )
 
 const (
-	host            string = "http://localhost:3000"
-	endpoint        string = "ws://localhost:3000"
+	host     string = "http://localhost:3000"
+	endpoint string = "ws://localhost:3000"
 )
 
 // Test Helpers
@@ -26,7 +26,7 @@ func expectSame(t *testing.T, a interface{}, b interface{}) {
 }
 
 func expectApproximateTimestamp(t *testing.T, a int64, b int64) {
-	if a != b && a != b + 1 {
+	if a != b && a != b+1 {
 		t.Errorf("Expected %v to be bigger than or equal to %v", b, a)
 	}
 }
@@ -49,40 +49,44 @@ func utcTimestamp() int64 {
 }
 
 type Expectation struct {
-	StatusCode int
-	Body string
-	RateLimitLimit string
+	StatusCode         int
+	Body               string
+	RateLimitLimit     string
 	RateLimitRemaining string
-	RateLimitReset int64
-	Wait time.Duration
+	RateLimitReset     int64
+	Wait               time.Duration
 }
 
 func setupMartiniWithPolicy(limit uint64, within time.Duration, options ...*Options) *martini.ClassicMartini {
 	m := martini.Classic()
-	
-	m.Use(Policy(&Quota{
-		Limit: limit,
-		Within: within,
-	}, options...))
+
+	addPolicy(m, limit, within, options...)
 
 	m.Any("/test", func() int {
 		return http.StatusOK
 	})
-	
+
 	return m
+}
+
+func addPolicy(m *martini.ClassicMartini, limit uint64, within time.Duration, options ...*Options) {
+	m.Use(Policy(&Quota{
+		Limit:  limit,
+		Within: within,
+	}, options...))
 }
 
 func setupMartiniWithPolicyAsHandler(limit uint64, within time.Duration, options ...*Options) *martini.ClassicMartini {
 	m := martini.Classic()
 
 	m.Any("/test", Policy(&Quota{
-		Limit: limit,
+		Limit:  limit,
 		Within: within,
 	}, options...),
-	func() int {
-		return http.StatusOK
-	})
-	
+		func() int {
+			return http.StatusOK
+		})
+
 	return m
 }
 
@@ -90,11 +94,11 @@ func testResponses(t *testing.T, m *martini.ClassicMartini, expectations ...*Exp
 	for _, expectation := range expectations {
 		req, err := http.NewRequest("GET", "/test", strings.NewReader(""))
 		reflect.ValueOf(req).Elem().FieldByName("RemoteAddr").SetString("1.2.3.4:5000")
-		
+
 		if err != nil {
 			t.Error(err)
 		}
-				
+
 		time.Sleep(expectation.Wait)
 		recorder := httptest.NewRecorder()
 		m.ServeHTTP(recorder, req)
@@ -113,7 +117,7 @@ func testResponses(t *testing.T, m *martini.ClassicMartini, expectations ...*Exp
 }
 
 func TestTimeLimit(t *testing.T) {
-	m := setupMartiniWithPolicyAsHandler(1, 10 * time.Millisecond)
+	m := setupMartiniWithPolicyAsHandler(1, 10*time.Millisecond)
 	testResponses(t, m, &Expectation{
 		http.StatusOK,
 		"",
@@ -139,11 +143,11 @@ func TestTimeLimit(t *testing.T) {
 }
 
 func TestTimeLimitWithOptions(t *testing.T) {
-	m := setupMartiniWithPolicy(1, 10 * time.Millisecond, &Options{
+	m := setupMartiniWithPolicy(1, 10*time.Millisecond, &Options{
 		StatusCode: http.StatusBadRequest,
-		Message: "Server says no",
+		Message:    "Server says no",
 	})
-	
+
 	testResponses(t, m, &Expectation{
 		http.StatusOK,
 		"",
@@ -169,7 +173,7 @@ func TestTimeLimitWithOptions(t *testing.T) {
 }
 
 func TestRateLimit(t *testing.T) {
-	m := setupMartiniWithPolicy(2, 10 * time.Millisecond)
+	m := setupMartiniWithPolicy(2, 10*time.Millisecond)
 	testResponses(t, m, &Expectation{
 		http.StatusOK,
 		"",
@@ -202,9 +206,9 @@ func TestRateLimit(t *testing.T) {
 }
 
 func TestRateLimitWithOptions(t *testing.T) {
-	m := setupMartiniWithPolicyAsHandler(2, 10 * time.Millisecond, &Options{
+	m := setupMartiniWithPolicyAsHandler(2, 10*time.Millisecond, &Options{
 		StatusCode: http.StatusBadRequest,
-		Message: "Server says no",
+		Message:    "Server says no",
 	})
 	testResponses(t, m, &Expectation{
 		http.StatusOK,
@@ -234,5 +238,40 @@ func TestRateLimitWithOptions(t *testing.T) {
 		"1",
 		utcTimestamp(),
 		10 * time.Millisecond,
+	})
+}
+
+func TestMultiplePolicies(t *testing.T) {
+	m := setupMartiniWithPolicyAsHandler(2, 20*time.Millisecond)
+	addPolicy(m, 1, 5*time.Millisecond)
+
+	testResponses(t, m, &Expectation{
+		http.StatusOK,
+		"",
+		"2",
+		"1",
+		utcTimestamp(),
+		0,
+	}, &Expectation{ // Time Limit Throttling kicks in
+		StatusTooManyRequests,
+		"Too Many Requests",
+		"1",
+		"0",
+		utcTimestamp(),
+		0,
+	}, &Expectation{
+		http.StatusOK,
+		"",
+		"2",
+		"0",
+		utcTimestamp(),
+		5 * time.Millisecond,
+	}, &Expectation{
+		StatusTooManyRequests,
+		"Too Many Requests",
+		"2",
+		"0",
+		utcTimestamp(),
+		5 * time.Millisecond,
 	})
 }

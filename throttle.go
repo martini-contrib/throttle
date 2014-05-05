@@ -15,16 +15,16 @@ import (
 
 const (
 	// Too Many Requests According to http://tools.ietf.org/html/rfc6585#page-3
-	StatusTooManyRequests  = 429
-	
+	StatusTooManyRequests = 429
+
 	// The default Status Code used
-	defaultStatusCode      = StatusTooManyRequests
-	
+	defaultStatusCode = StatusTooManyRequests
+
 	// The default Message to include, defaults to 429 status code title
-	defaultMessage         = "Too Many Requests"
-	
+	defaultMessage = "Too Many Requests"
+
 	// The default key prefix for Key Value Storage
-	defaultKeyPrefix       = "throttle"
+	defaultKeyPrefix = "throttle"
 )
 
 type Options struct {
@@ -34,15 +34,15 @@ type Options struct {
 
 	// The message to be returned as the body of throttled requests
 	Message string
-	
+
 	// The function used to identify the requester
 	// Defaults to IP identification
-	IdentificationFunction func(*http.Request)string
-	
+	IdentificationFunction func(*http.Request) string
+
 	// The key prefix to use in any key value store
 	// defaults to "throttle"
 	KeyPrefix string
-	
+
 	// The store to use
 	// defaults to a simple concurrent-safe map[string]string
 	Store KeyValueStorer
@@ -66,6 +66,10 @@ type Quota struct {
 	Within time.Duration
 }
 
+func (q *Quota) KeyId() string {
+	return strconv.FormatInt(int64(q.Within)/int64(q.Limit), 10)
+}
+
 // An access message to return to the user
 type accessMessage struct {
 	// The given status Code
@@ -85,8 +89,8 @@ func newAccessMessage(statusCode int, message string) *accessMessage {
 // An access count for a single identified user.
 // Will be stored in the key value store, 1 per Policy and User
 type accessCount struct {
-	Count uint64           `json:"count"`
-	Start time.Time        `json:"start"`
+	Count    uint64        `json:"count"`
+	Start    time.Time     `json:"start"`
 	Duration time.Duration `json:"duration"`
 }
 
@@ -142,13 +146,13 @@ type controller struct {
 // Get an access count by id
 func (c *controller) GetAccessCount(id string) (a *accessCount) {
 	accessCountBytes, err := c.store.Get(id)
-	
+
 	if err == nil {
 		a = accessCountFromBytes(accessCountBytes)
 	} else {
 		a = newAccessCount(c.quota.Within)
 	}
-	
+
 	return a
 }
 
@@ -158,7 +162,7 @@ func (c *controller) SetAccessCount(id string, a *accessCount) {
 	if err != nil {
 		panic(err.Error())
 	}
-	
+
 	err = c.store.Set(id, marshalled)
 	if err != nil {
 		panic(err.Error())
@@ -182,14 +186,14 @@ func (c *controller) DeniesAccess(id string) bool {
 // Get a time for the given id when the quota time window will be reset
 func (c *controller) RetryAt(id string) time.Time {
 	counter := c.GetAccessCount(id)
-	
+
 	return counter.Start.Add(c.quota.Within)
 }
 
 // Get the remaining limit for the given id
 func (c *controller) RemainingLimit(id string) uint64 {
 	counter := c.GetAccessCount(id)
-	
+
 	return c.quota.Limit - counter.GetCount()
 }
 
@@ -214,11 +218,11 @@ func (o *Options) Identify(req *http.Request) string {
 // Second is Options to use with this policy. For further information on options,
 // see Options further above.
 func Policy(quota *Quota, options ...*Options) martini.Handler {
-	o            := newOptions(options)
-	controller   := newController(quota, o.Store)
-	
+	o := newOptions(options)
+	controller := newController(quota, o.Store)
+
 	return func(context martini.Context, resp http.ResponseWriter, req *http.Request) {
-		id := makeKey(o.KeyPrefix, o.Identify(req))
+		id := makeKey(o.KeyPrefix, quota.KeyId(), o.Identify(req))
 
 		if controller.DeniesAccess(id) {
 			msg := newAccessMessage(o.StatusCode, o.Message)
@@ -230,7 +234,7 @@ func Policy(quota *Quota, options ...*Options) martini.Handler {
 			controller.RegisterAccess(id)
 			setRateLimitHeaders(resp, controller, id)
 		}
-		
+
 	}
 }
 
@@ -274,15 +278,15 @@ func newOptions(options []*Options) *Options {
 
 	// map the given values to the options
 	optionsValue := reflect.ValueOf(options[0])
-	oValue       := reflect.ValueOf(&o)
-	numFields    := optionsValue.Elem().NumField()
+	oValue := reflect.ValueOf(&o)
+	numFields := optionsValue.Elem().NumField()
 
 	for i := 0; i < numFields; i++ {
 		if value := optionsValue.Elem().Field(i); value.IsValid() && value.CanSet() && isNonEmptyOption(value) {
 			oValue.Elem().Field(i).Set(value)
 		}
 	}
-	
+
 	if o.Store == nil {
 		o.Store = NewMapStore(accessCount{})
 	}
