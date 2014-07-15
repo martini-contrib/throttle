@@ -248,6 +248,10 @@ func setRateLimitHeaders(resp http.ResponseWriter, controller *controller, id st
 
 // The default identifier function. Identifies a client by IP
 func defaultIdentify(req *http.Request) string {
+	if forwardedFor := req.Header.Get("X-FORWARDED-FOR"); forwardedFor != "" {
+		return forwardedFor
+	}
+
 	ip, _, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {
 		panic(err.Error())
