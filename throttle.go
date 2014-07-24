@@ -25,6 +25,9 @@ const (
 
 	// The default key prefix for Key Value Storage
 	defaultKeyPrefix = "throttle"
+
+	// The header name to retrieve an IP address under a proxy
+	forwardedForHeader = "X-FORWARDED-FOR"
 )
 
 type Options struct {
@@ -248,7 +251,7 @@ func setRateLimitHeaders(resp http.ResponseWriter, controller *controller, id st
 
 // The default identifier function. Identifies a client by IP
 func defaultIdentify(req *http.Request) string {
-	if forwardedFor := req.Header.Get("X-FORWARDED-FOR"); forwardedFor != "" {
+	if forwardedFor := req.Header.Get(forwardedForHeader); forwardedFor != "" {
 		if ipParsed := net.ParseIP(forwardedFor); ipParsed != nil {
 			return ipParsed.String()
 		}
