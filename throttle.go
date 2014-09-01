@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-martini/martini"
 )
 
 const (
@@ -217,11 +215,11 @@ func (o *Options) Identify(req *http.Request) string {
 // access to resources will be denied to this user
 // Second is Options to use with this policy. For further information on options,
 // see Options further above.
-func Policy(quota *Quota, options ...*Options) martini.Handler {
+func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, req *http.Request) {
 	o := newOptions(options)
 	controller := newController(quota, o.Store)
 
-	return func(context martini.Context, resp http.ResponseWriter, req *http.Request) {
+	return func(resp http.ResponseWriter, req *http.Request) {
 		id := makeKey(o.KeyPrefix, quota.KeyId(), o.Identify(req))
 
 		if controller.DeniesAccess(id) {
