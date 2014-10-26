@@ -1,4 +1,4 @@
-# throttle [![wercker status](https://app.wercker.com/status/84d018aa743df8a471791d0e39ef3b80/s/ "wercker status")](https://app.wercker.com/project/bykey/84d018aa743df8a471791d0e39ef3b80)
+# throttle [![wercker status](https://app.wercker.com/status/55bf32b84fef488e32f82f728e680086/s "wercker status")](https://app.wercker.com/project/bykey/55bf32b84fef488e32f82f728e680086)
 
 Simple throttling for martini
 
