@@ -25,6 +25,12 @@ func expectSame(t *testing.T, a interface{}, b interface{}) {
 	}
 }
 
+func expectEmpty(t *testing.T, a []string) {
+	if len(a) != 0 {
+		t.Errorf("Expected %T: %v to be empty", a, a)
+	}
+}
+
 func expectApproximateTimestamp(t *testing.T, a int64, b int64) {
 	if a != b && a != b+1 {
 		t.Errorf("Expected %v to be bigger than or equal to %v", b, a)
@@ -55,6 +61,7 @@ type Expectation struct {
 	RateLimitRemaining string
 	RateLimitReset     int64
 	Wait               time.Duration
+	ForwardedFor       string
 }
 
 func setupMartiniWithPolicy(limit uint64, within time.Duration, options ...*Options) *martini.ClassicMartini {
@@ -93,7 +100,12 @@ func setupMartiniWithPolicyAsHandler(limit uint64, within time.Duration, options
 func testResponses(t *testing.T, m *martini.ClassicMartini, expectations ...*Expectation) {
 	for _, expectation := range expectations {
 		req, err := http.NewRequest("GET", "/test", strings.NewReader(""))
-		reflect.ValueOf(req).Elem().FieldByName("RemoteAddr").SetString("1.2.3.4:5000")
+
+		if expectation.ForwardedFor != "" {
+			req.Header.Set("X-Forwarded-For", expectation.ForwardedFor)
+		} else {
+			reflect.ValueOf(req).Elem().FieldByName("RemoteAddr").SetString("1.2.3.4:5000")
+		}
 
 		if err != nil {
 			t.Error(err)
@@ -106,39 +118,78 @@ func testResponses(t *testing.T, m *martini.ClassicMartini, expectations ...*Exp
 		if expectation.Body != "" {
 			expectSame(t, recorder.Body.String(), expectation.Body)
 		}
-		expectSame(t, recorder.Header()["X-Ratelimit-Limit"][0], expectation.RateLimitLimit)
-		expectSame(t, recorder.Header()["X-Ratelimit-Remaining"][0], expectation.RateLimitRemaining)
-		resetTime, err := strconv.ParseInt(recorder.Header()["X-Ratelimit-Reset"][0], 10, 64)
-		if err != nil {
-			t.Errorf(err.Error())
+
+		header := recorder.Header()
+		rateLimitLimit := header["X-Ratelimit-Limit"]
+		rateLimitRemaining := header["X-Ratelimit-Remaining"]
+		rateLimitReset := header["X-Ratelimit-Reset"]
+
+		if expectation.RateLimitLimit != "" {
+			expectSame(t, rateLimitLimit[0], expectation.RateLimitLimit)
+		} else {
+			expectEmpty(t, rateLimitLimit)
 		}
-		expectApproximateTimestamp(t, resetTime, expectation.RateLimitReset)
+
+		if expectation.RateLimitRemaining != "" {
+			expectSame(t, rateLimitRemaining[0], expectation.RateLimitRemaining)
+		} else {
+			expectEmpty(t, rateLimitRemaining)
+		}
+
+		if expectation.RateLimitReset != 0 {
+			resetTime, err := strconv.ParseInt(rateLimitReset[0], 10, 64)
+			if err != nil {
+				t.Errorf(err.Error())
+			}
+			expectApproximateTimestamp(t, resetTime, expectation.RateLimitReset)
+		}
 	}
 }
 
 func TestTimeLimit(t *testing.T) {
 	m := setupMartiniWithPolicyAsHandler(1, 10*time.Millisecond)
 	testResponses(t, m, &Expectation{
-		http.StatusOK,
-		"",
-		"1",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		StatusTooManyRequests,
-		"Too Many Requests",
-		"1",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         StatusTooManyRequests,
+		Body:               "Too Many Requests",
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusOK,
-		"",
-		"1",
-		"0",
-		utcTimestamp(),
-		10 * time.Millisecond,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               10 * time.Millisecond,
+	})
+}
+
+func TestTimeLimitWhenForwarded(t *testing.T) {
+	m := setupMartiniWithPolicyAsHandler(1, 10*time.Millisecond)
+	testResponses(t, m, &Expectation{
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
+		ForwardedFor:       "2.3.4.5",
+	}, &Expectation{
+		StatusCode:         StatusTooManyRequests,
+		Body:               "Too Many Requests",
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
+		ForwardedFor:       "2.3.4.5",
+	}, &Expectation{
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               10 * time.Millisecond,
+		ForwardedFor:       "2.3.4.5",
 	})
 }
 
@@ -149,59 +200,64 @@ func TestTimeLimitWithOptions(t *testing.T) {
 	})
 
 	testResponses(t, m, &Expectation{
-		http.StatusOK,
-		"",
-		"1",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusBadRequest,
-		"Server says no",
-		"1",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusBadRequest,
+		Body:               "Server says no",
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusOK,
-		"",
-		"1",
-		"0",
-		utcTimestamp(),
-		10 * time.Millisecond,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               10 * time.Millisecond,
+	})
+}
+
+func TestLimitWhenDisabled(t *testing.T) {
+	m := setupMartiniWithPolicy(1, 10*time.Millisecond, &Options{
+		Disabled: true,
+	})
+
+	testResponses(t, m, &Expectation{
+		StatusCode: http.StatusOK,
+	}, &Expectation{
+		StatusCode: http.StatusOK,
+	}, &Expectation{
+		StatusCode: http.StatusOK,
+		Wait:       10 * time.Millisecond,
 	})
 }
 
 func TestRateLimit(t *testing.T) {
 	m := setupMartiniWithPolicy(2, 10*time.Millisecond)
 	testResponses(t, m, &Expectation{
-		http.StatusOK,
-		"",
-		"2",
-		"1",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "1",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusOK,
-		"",
-		"2",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		StatusTooManyRequests,
-		"Too Many Requests",
-		"2",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         StatusTooManyRequests,
+		Body:               "Too Many Requests",
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusOK,
-		"",
-		"2",
-		"1",
-		utcTimestamp(),
-		10 * time.Millisecond,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "1",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               10 * time.Millisecond,
 	})
 }
 
@@ -211,33 +267,27 @@ func TestRateLimitWithOptions(t *testing.T) {
 		Message:    "Server says no",
 	})
 	testResponses(t, m, &Expectation{
-		http.StatusOK,
-		"",
-		"2",
-		"1",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "1",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusOK,
-		"",
-		"2",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusBadRequest,
-		"Server says no",
-		"2",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusBadRequest,
+		Body:               "Server says no",
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusOK,
-		"",
-		"2",
-		"1",
-		utcTimestamp(),
-		10 * time.Millisecond,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "1",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               10 * time.Millisecond,
 	})
 }
 
@@ -246,32 +296,28 @@ func TestMultiplePolicies(t *testing.T) {
 	addPolicy(m, 1, 5*time.Millisecond)
 
 	testResponses(t, m, &Expectation{
-		http.StatusOK,
-		"",
-		"2",
-		"1",
-		utcTimestamp(),
-		0,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "1",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{ // Time Limit Throttling kicks in
-		StatusTooManyRequests,
-		"Too Many Requests",
-		"1",
-		"0",
-		utcTimestamp(),
-		0,
+		StatusCode:         StatusTooManyRequests,
+		Body:               "Too Many Requests",
+		RateLimitLimit:     "1",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
 	}, &Expectation{
-		http.StatusOK,
-		"",
-		"2",
-		"0",
-		utcTimestamp(),
-		5 * time.Millisecond,
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               5 * time.Millisecond,
 	}, &Expectation{
-		StatusTooManyRequests,
-		"Too Many Requests",
-		"2",
-		"0",
-		utcTimestamp(),
-		5 * time.Millisecond,
+		StatusCode:         StatusTooManyRequests,
+		Body:               "Too Many Requests",
+		RateLimitLimit:     "2",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               5 * time.Millisecond,
 	})
 }

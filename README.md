@@ -62,18 +62,22 @@ You can configure the options for throttling by passing in ``throttle.Options`` 
 
 	// The response body returned when the client exceeds the quota
 	Message string
-	
+
 	// A function to identify a request, must satisfy the interface func(*http.Request)string
 	// Defaults to a function identifying the request by IP
 	// So if you want to identify by an API key given in request headers, configure this option
 	IndentificationFunction IdentificationFunc
-	
+
 	// The key prefix to use in any key value store
 	KeyPrefix string
-	
+
 	// The store to use. The key value store has to satisfy the throttle.KeyValueStorer interface
 	// For further explanation, see below
 	Store KeyValueStorer
+
+	// If the throttle is disabled or not
+	// defaults to false
+	Disabled bool
 }
 ```
 
