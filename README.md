@@ -64,9 +64,9 @@ You can configure the options for throttling by passing in ``throttle.Options`` 
 	Message string
 
 	// A function to identify a request, must satisfy the interface func(*http.Request)string
-	// Defaults to a function identifying the request by IP
-	// So if you want to identify by an API key given in request headers, configure this option
-	IndentificationFunction IdentificationFunc
+	// Defaults to a function identifying the request by IP or X-Forwarded-For Header if provided
+	// So if you want to identify by an API key given in request headers or something else, configure this option
+	IndentificationFunction func(*http.Request) string
 
 	// The key prefix to use in any key value store
 	KeyPrefix string
