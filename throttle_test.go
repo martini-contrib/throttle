@@ -25,6 +25,12 @@ func expectSame(t *testing.T, a interface{}, b interface{}) {
 	}
 }
 
+func expectEmpty(t *testing.T, a []string) {
+	if len(a) != 0 {
+		t.Errorf("Expected %T: %v to be empty", a, a)
+	}
+}
+
 func expectApproximateTimestamp(t *testing.T, a int64, b int64) {
 	if a != b && a != b+1 {
 		t.Errorf("Expected %v to be bigger than or equal to %v", b, a)
@@ -106,13 +112,31 @@ func testResponses(t *testing.T, m *martini.ClassicMartini, expectations ...*Exp
 		if expectation.Body != "" {
 			expectSame(t, recorder.Body.String(), expectation.Body)
 		}
-		expectSame(t, recorder.Header()["X-Ratelimit-Limit"][0], expectation.RateLimitLimit)
-		expectSame(t, recorder.Header()["X-Ratelimit-Remaining"][0], expectation.RateLimitRemaining)
-		resetTime, err := strconv.ParseInt(recorder.Header()["X-Ratelimit-Reset"][0], 10, 64)
-		if err != nil {
-			t.Errorf(err.Error())
+
+		header := recorder.Header()
+		rateLimitLimit := header["X-Ratelimit-Limit"]
+		rateLimitRemaining := header["X-Ratelimit-Remaining"]
+		rateLimitReset := header["X-Ratelimit-Reset"]
+
+		if expectation.RateLimitLimit != "" {
+			expectSame(t, rateLimitLimit[0], expectation.RateLimitLimit)
+		} else {
+			expectEmpty(t, rateLimitLimit)
 		}
-		expectApproximateTimestamp(t, resetTime, expectation.RateLimitReset)
+
+		if expectation.RateLimitRemaining != "" {
+			expectSame(t, rateLimitRemaining[0], expectation.RateLimitRemaining)
+		} else {
+			expectEmpty(t, rateLimitRemaining)
+		}
+
+		if expectation.RateLimitReset == 0 {
+			resetTime, err := strconv.ParseInt(rateLimitReset[0], 10, 64)
+			if err != nil {
+				t.Errorf(err.Error())
+			}
+			expectApproximateTimestamp(t, resetTime, expectation.RateLimitReset)
+		}
 	}
 }
 
@@ -167,6 +191,35 @@ func TestTimeLimitWithOptions(t *testing.T) {
 		"",
 		"1",
 		"0",
+		utcTimestamp(),
+		10 * time.Millisecond,
+	})
+}
+
+func TestLimitWhenDisabled(t *testing.T) {
+	m := setupMartiniWithPolicy(1, 10*time.Millisecond, &Options{
+		Disabled: true,
+	})
+
+	testResponses(t, m, &Expectation{
+		http.StatusOK,
+		"",
+		"",
+		"",
+		utcTimestamp(),
+		0,
+	}, &Expectation{
+		http.StatusOK,
+		"",
+		"",
+		"",
+		utcTimestamp(),
+		0,
+	}, &Expectation{
+		http.StatusOK,
+		"",
+		"",
+		"",
 		utcTimestamp(),
 		10 * time.Millisecond,
 	})

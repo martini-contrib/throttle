@@ -23,6 +23,9 @@ const (
 
 	// The default key prefix for Key Value Storage
 	defaultKeyPrefix = "throttle"
+
+	// The default for the disabled setting
+	defaultDisabled = false
 )
 
 type Options struct {
@@ -44,6 +47,10 @@ type Options struct {
 	// The store to use
 	// defaults to a simple concurrent-safe map[string]string
 	Store KeyValueStorer
+
+	// If the throttle is disabled or not
+	// defaults to false
+	Disabled bool
 }
 
 // KeyValueStorer is the required interface for the Store Option
@@ -79,8 +86,8 @@ type accessMessage struct {
 // Return a new access message with the properties given
 func newAccessMessage(statusCode int, message string) *accessMessage {
 	return &accessMessage{
-		statusCode,
-		message,
+		StatusCode: statusCode,
+		Message:    message,
 	}
 }
 
@@ -198,8 +205,8 @@ func (c *controller) RemainingLimit(id string) uint64 {
 // Return a new controller with the given quota and store
 func newController(quota *Quota, store KeyValueStorer) *controller {
 	return &controller{
-		quota,
-		store,
+		quota: quota,
+		store: store,
 	}
 }
 
@@ -217,6 +224,10 @@ func (o *Options) Identify(req *http.Request) string {
 // see Options further above.
 func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, req *http.Request) {
 	o := newOptions(options)
+	if o.Disabled {
+		return func(resp http.ResponseWriter, req *http.Request) {}
+	}
+
 	controller := newController(quota, o.Store)
 
 	return func(resp http.ResponseWriter, req *http.Request) {
@@ -261,11 +272,12 @@ func makeKey(parts ...string) string {
 // Creates new default options and assigns any given options
 func newOptions(options []*Options) *Options {
 	o := Options{
-		defaultStatusCode,
-		defaultMessage,
-		defaultIdentify,
-		defaultKeyPrefix,
-		nil,
+		StatusCode:             defaultStatusCode,
+		Message:                defaultMessage,
+		IdentificationFunction: defaultIdentify,
+		KeyPrefix:              defaultKeyPrefix,
+		Store:                  nil,
+		Disabled:               defaultDisabled,
 	}
 
 	// when all defaults, return it
@@ -298,7 +310,7 @@ func isNonEmptyOption(v reflect.Value) bool {
 	case reflect.String:
 		return v.Len() != 0
 	case reflect.Bool:
-		return v.Bool()
+		return v.IsValid()
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v.Int() != 0
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
