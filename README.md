@@ -1,6 +1,6 @@
 # throttle [![wercker status](https://app.wercker.com/status/84d018aa743df8a471791d0e39ef3b80/s/ "wercker status")](https://app.wercker.com/project/bykey/84d018aa743df8a471791d0e39ef3b80)
 
-Simple throttling for martini
+Simple throttling for martini or [negroni](https://github.com/martini-contrib/throttle/pull/6)
 
 [API Reference](http://godoc.org/github.com/beatrichartz/throttle)
 
