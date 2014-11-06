@@ -316,6 +316,8 @@ func newOptions(options []*Options) *Options {
 // Check if an option is assigned
 func isNonEmptyOption(v reflect.Value) bool {
 	switch v.Kind() {
+	case reflect.Func:
+		return true
 	case reflect.String:
 		return v.Len() != 0
 	case reflect.Bool:
