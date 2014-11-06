@@ -1,12 +1,12 @@
 # throttle [![wercker status](https://app.wercker.com/status/55bf32b84fef488e32f82f728e680086/s "wercker status")](https://app.wercker.com/project/bykey/55bf32b84fef488e32f82f728e680086)
 
-Simple throttling for martini or [negroni](https://github.com/martini-contrib/throttle/pull/6)
+Simple throttling for martini, [negroni](https://github.com/martini-contrib/throttle/pull/6) or [Macaron](https://github.com/Unknwon/macaron).
 
 [API Reference](http://godoc.org/github.com/beatrichartz/throttle)
 
 ## Description
 
-Package `throttle` provides quota-based throttling for martini.
+Package `throttle` provides quota-based throttling.
 
 #### Policy
 
@@ -66,7 +66,7 @@ You can configure the options for throttling by passing in ``throttle.Options`` 
 	// A function to identify a request, must satisfy the interface func(*http.Request)string
 	// Defaults to a function identifying the request by IP or X-Forwarded-For Header if provided
 	// So if you want to identify by an API key given in request headers or something else, configure this option
-	IndentificationFunction func(*http.Request) string
+	IdentificationFunction func(*http.Request) string
 
 	// The key prefix to use in any key value store
 	KeyPrefix string
