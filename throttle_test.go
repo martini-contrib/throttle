@@ -5,8 +5,10 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -62,6 +64,7 @@ type Expectation struct {
 	RateLimitReset     int64
 	Wait               time.Duration
 	ForwardedFor       string
+	Concurrent         bool
 }
 
 func setupMartiniWithPolicy(limit uint64, within time.Duration, options ...*Options) *martini.ClassicMartini {
@@ -144,6 +147,70 @@ func testResponses(t *testing.T, m *martini.ClassicMartini, expectations ...*Exp
 			expectApproximateTimestamp(t, resetTime, expectation.RateLimitReset)
 		}
 	}
+}
+
+func testResponseToExpectation(t *testing.T, m *martini.ClassicMartini, expectation *Expectation) {
+	req, err := http.NewRequest("GET", "/test", strings.NewReader(""))
+
+	if expectation.ForwardedFor != "" {
+		req.Header.Set("X-Forwarded-For", expectation.ForwardedFor)
+	} else {
+		reflect.ValueOf(req).Elem().FieldByName("RemoteAddr").SetString("1.2.3.4:5000")
+	}
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	time.Sleep(expectation.Wait)
+	recorder := httptest.NewRecorder()
+	m.ServeHTTP(recorder, req)
+
+	expectStatusCode(t, expectation.StatusCode, recorder.Code)
+	if expectation.Body != "" {
+		expectSame(t, recorder.Body.String(), expectation.Body)
+	}
+
+	header := recorder.Header()
+	rateLimitLimit := header["X-Ratelimit-Limit"]
+	rateLimitRemaining := header["X-Ratelimit-Remaining"]
+	rateLimitReset := header["X-Ratelimit-Reset"]
+
+	if expectation.RateLimitLimit != "" {
+		expectSame(t, rateLimitLimit[0], expectation.RateLimitLimit)
+	}
+
+	if expectation.RateLimitRemaining != "" {
+		expectSame(t, rateLimitRemaining[0], expectation.RateLimitRemaining)
+	}
+
+	if expectation.RateLimitReset != 0 {
+		resetTime, err := strconv.ParseInt(rateLimitReset[0], 10, 64)
+		if err != nil {
+			t.Errorf(err.Error())
+		}
+		expectApproximateTimestamp(t, resetTime, expectation.RateLimitReset)
+	}
+}
+
+func testResponsesToConcurrentRequests(t *testing.T, m *martini.ClassicMartini, expectations ...*Expectation) {
+	wg := sync.WaitGroup{}
+	for i, e := range expectations {
+		if e.Concurrent {
+			wg.Add(1)
+			println("C")
+			go func(k int, expectation *Expectation) {
+				defer wg.Done()
+				testResponseToExpectation(t, m, expectation)
+			}(i, e)
+		} else {
+			wg.Wait()
+			println("E")
+			testResponseToExpectation(t, m, e)
+		}
+	}
+
+	wg.Wait()
 }
 
 func TestTimeLimit(t *testing.T) {
@@ -319,5 +386,49 @@ func TestMultiplePolicies(t *testing.T) {
 		RateLimitRemaining: "0",
 		RateLimitReset:     utcTimestamp(),
 		Wait:               5 * time.Millisecond,
+	})
+}
+
+func TestRateLimitConcurrentCountdown(t *testing.T) {
+	runtime.GOMAXPROCS(8)
+	m := setupMartiniWithPolicy(5, 100*time.Millisecond)
+	testResponsesToConcurrentRequests(t, m, &Expectation{
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "5",
+		RateLimitReset:     utcTimestamp(),
+		Concurrent: true,
+	}, &Expectation{
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "5",
+		RateLimitReset:     utcTimestamp(),
+		Concurrent: true,
+	}, &Expectation{
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "5",
+		RateLimitReset:     utcTimestamp(),
+		Concurrent: true,
+	}, &Expectation{
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "5",
+		RateLimitReset:     utcTimestamp(),
+		Concurrent: true,
+	}, &Expectation{
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "5",
+		RateLimitReset:     utcTimestamp(),
+		Concurrent: true,
+	}, &Expectation{
+		StatusCode:         StatusTooManyRequests,
+		Body:               "Too Many Requests",
+		RateLimitLimit:     "5",
+		RateLimitRemaining: "0",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               75 * time.Millisecond,
+	}, &Expectation{
+		StatusCode:         http.StatusOK,
+		RateLimitLimit:     "5",
+		RateLimitRemaining: "4",
+		RateLimitReset:     utcTimestamp(),
+		Wait:               200 * time.Millisecond,
 	})
 }

@@ -19,17 +19,7 @@ func sleepRandom() {
 
 func TestSet(t *testing.T) {
 	store := NewMapStore(accessCount{})
-	wg := &sync.WaitGroup{}
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(k int) {
-			store.Set("KEY", []byte(strconv.FormatInt(int64(k), 10)))
-			wg.Done()
-		}(i)
-	}
-
-	wg.Wait()
-
+	store.Set("KEY", []byte("4"))
 	value, err := store.Get("KEY")
 	if err != nil {
 		t.Errorf(err.Error())

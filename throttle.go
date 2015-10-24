@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -147,6 +148,7 @@ func accessCountFromBytes(accessCountBytes []byte) *accessCount {
 
 // The controller, stores the allowed quota and has access to the store
 type controller struct {
+	*sync.Mutex
 	quota *Quota
 	store KeyValueStorer
 }
@@ -179,6 +181,9 @@ func (c *controller) SetAccessCount(id string, a *accessCount) {
 
 // Gets the access count, increments it and writes it back to the store
 func (c *controller) RegisterAccess(id string) {
+	c.Lock()
+	defer c.Unlock()
+
 	counter := c.GetAccessCount(id)
 	counter.Increment()
 	c.SetAccessCount(id, counter)
@@ -208,8 +213,9 @@ func (c *controller) RemainingLimit(id string) uint64 {
 // Return a new controller with the given quota and store
 func newController(quota *Quota, store KeyValueStorer) *controller {
 	return &controller{
-		quota: quota,
-		store: store,
+		&sync.Mutex{},
+		quota,
+		store,
 	}
 }
 
