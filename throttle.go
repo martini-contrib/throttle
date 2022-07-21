@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-martini/martini"
 )
 
 const (
@@ -55,6 +57,11 @@ type Options struct {
 	// If the throttle is disabled or not
 	// defaults to false
 	Disabled bool
+
+	// If this function returns true, the request will not be counted towards the access count.
+	// You can set it to provide your own conditions for a request to be counted based on the request, the response or
+	// something else stored in the context
+	SkipCountFunction func(res http.ResponseWriter, req *http.Request, c martini.Context) bool
 }
 
 // KeyValueStorer is the required interface for the Store Option
@@ -224,6 +231,14 @@ func (o *Options) Identify(req *http.Request) string {
 	return o.IdentificationFunction(req)
 }
 
+func (o *Options) SkipCount(res http.ResponseWriter, req *http.Request, c martini.Context) bool {
+	if o.SkipCountFunction == nil {
+		return false
+	}
+
+	return o.SkipCountFunction(res, req, c)
+}
+
 // A throttling Policy
 // Takes two arguments, one required:
 // First is a Quota (A Limit with an associated time). When the given Limit
@@ -231,7 +246,7 @@ func (o *Options) Identify(req *http.Request) string {
 // access to resources will be denied to this user
 // Second is Options to use with this policy. For further information on options,
 // see Options further above.
-func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, req *http.Request) {
+func Policy(quota *Quota, options ...*Options) martini.Handler {
 	o := newOptions(options)
 	if o.Disabled {
 		return func(resp http.ResponseWriter, req *http.Request) {}
@@ -239,7 +254,7 @@ func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, re
 
 	controller := newController(quota, o.Store)
 
-	return func(resp http.ResponseWriter, req *http.Request) {
+	return func(resp http.ResponseWriter, req *http.Request, c martini.Context) {
 		id := makeKey(o.KeyPrefix, quota.KeyId(), o.Identify(req))
 
 		if controller.DeniesAccess(id) {
@@ -248,11 +263,13 @@ func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, re
 			resp.WriteHeader(msg.StatusCode)
 			resp.Write([]byte(msg.Message))
 			return
-		} else {
-			controller.RegisterAccess(id)
-			setRateLimitHeaders(resp, controller, id)
 		}
 
+		if o.SkipCount(resp, req, c) {
+			return
+		}
+		controller.RegisterAccess(id)
+		setRateLimitHeaders(resp, controller, id)
 	}
 }
 
