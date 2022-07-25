@@ -59,7 +59,7 @@ type Options struct {
 	// If this function returns true, the request will not be counted towards the access count.
 	// You can set it to provide your own conditions for a request to be counted based on the request, the response or
 	// something else stored in the context
-	SkipRegisterFunction func(res http.ResponseWriter, req *http.Request) bool
+	SkipRegisterFunction func(resp http.ResponseWriter, req *http.Request) bool
 }
 
 // KeyValueStorer is the required interface for the Store Option
@@ -229,12 +229,12 @@ func (o *Options) Identify(req *http.Request) string {
 	return o.IdentificationFunction(req)
 }
 
-func (o *Options) SkipRegister(res http.ResponseWriter, req *http.Request) bool {
+func (o *Options) SkipRegister(resp http.ResponseWriter, req *http.Request) bool {
 	if o.SkipRegisterFunction == nil {
 		return false
 	}
 
-	return o.SkipRegisterFunction(res, req)
+	return o.SkipRegisterFunction(resp, req)
 }
 
 // A throttling Policy
