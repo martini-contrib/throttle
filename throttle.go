@@ -251,19 +251,18 @@ func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, re
 	return func(resp http.ResponseWriter, req *http.Request) {
 		id := makeKey(o.KeyPrefix, quota.KeyId(), o.Identify(req))
 
+		setRateLimitHeaders(resp, controller, id)
+
 		if controller.DeniesAccess(id) {
 			msg := newAccessMessage(o.StatusCode, o.Message)
-			setRateLimitHeaders(resp, controller, id)
 			resp.WriteHeader(msg.StatusCode)
 			resp.Write([]byte(msg.Message))
 			return
 		}
 
-		if o.SkipRegister(resp, req) {
-			return
+		if !o.SkipRegister(resp, req) {
+			controller.RegisterAccess(id)
 		}
-		controller.RegisterAccess(id)
-		setRateLimitHeaders(resp, controller, id)
 	}
 }
 
