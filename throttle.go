@@ -57,8 +57,8 @@ type Options struct {
 	Disabled bool
 
 	// If this function returns true, the request will not be counted towards the access count.
-	// You can set it to provide your own conditions for a request to be counted based on the request, the response or
-	// something else stored in the context
+	// You can set it to provide your own conditions for a request to be counted based on the request or the response,
+	// for example to exclude success responses from the count
 	SkipRegisterFunction func(resp http.ResponseWriter, req *http.Request) bool
 
 	// If this function returns true, the request will not checked for access, the policy will be ignored.
