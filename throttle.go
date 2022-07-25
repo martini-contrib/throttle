@@ -10,8 +10,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/go-martini/martini"
 )
 
 const (
@@ -61,7 +59,7 @@ type Options struct {
 	// If this function returns true, the request will not be counted towards the access count.
 	// You can set it to provide your own conditions for a request to be counted based on the request, the response or
 	// something else stored in the context
-	SkipCountFunction func(res http.ResponseWriter, req *http.Request, c martini.Context) bool
+	SkipCountFunction func(res http.ResponseWriter, req *http.Request) bool
 }
 
 // KeyValueStorer is the required interface for the Store Option
@@ -231,12 +229,12 @@ func (o *Options) Identify(req *http.Request) string {
 	return o.IdentificationFunction(req)
 }
 
-func (o *Options) SkipCount(res http.ResponseWriter, req *http.Request, c martini.Context) bool {
+func (o *Options) SkipCount(res http.ResponseWriter, req *http.Request) bool {
 	if o.SkipCountFunction == nil {
 		return false
 	}
 
-	return o.SkipCountFunction(res, req, c)
+	return o.SkipCountFunction(res, req)
 }
 
 // A throttling Policy
@@ -246,7 +244,7 @@ func (o *Options) SkipCount(res http.ResponseWriter, req *http.Request, c martin
 // access to resources will be denied to this user
 // Second is Options to use with this policy. For further information on options,
 // see Options further above.
-func Policy(quota *Quota, options ...*Options) martini.Handler {
+func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, req *http.Request) {
 	o := newOptions(options)
 	if o.Disabled {
 		return func(resp http.ResponseWriter, req *http.Request) {}
@@ -254,7 +252,7 @@ func Policy(quota *Quota, options ...*Options) martini.Handler {
 
 	controller := newController(quota, o.Store)
 
-	return func(resp http.ResponseWriter, req *http.Request, c martini.Context) {
+	return func(resp http.ResponseWriter, req *http.Request) {
 		id := makeKey(o.KeyPrefix, quota.KeyId(), o.Identify(req))
 
 		if controller.DeniesAccess(id) {
@@ -265,7 +263,7 @@ func Policy(quota *Quota, options ...*Options) martini.Handler {
 			return
 		}
 
-		if o.SkipCount(resp, req, c) {
+		if o.SkipCount(resp, req) {
 			return
 		}
 		controller.RegisterAccess(id)
