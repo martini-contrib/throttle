@@ -59,7 +59,7 @@ type Options struct {
 	// If this function returns true, the request will not be counted towards the access count.
 	// You can set it to provide your own conditions for a request to be counted based on the request, the response or
 	// something else stored in the context
-	SkipCountFunction func(res http.ResponseWriter, req *http.Request) bool
+	SkipRegisterFunction func(res http.ResponseWriter, req *http.Request) bool
 }
 
 // KeyValueStorer is the required interface for the Store Option
@@ -229,12 +229,12 @@ func (o *Options) Identify(req *http.Request) string {
 	return o.IdentificationFunction(req)
 }
 
-func (o *Options) SkipCount(res http.ResponseWriter, req *http.Request) bool {
-	if o.SkipCountFunction == nil {
+func (o *Options) SkipRegister(res http.ResponseWriter, req *http.Request) bool {
+	if o.SkipRegisterFunction == nil {
 		return false
 	}
 
-	return o.SkipCountFunction(res, req)
+	return o.SkipRegisterFunction(res, req)
 }
 
 // A throttling Policy
@@ -263,7 +263,7 @@ func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, re
 			return
 		}
 
-		if o.SkipCount(resp, req) {
+		if o.SkipRegister(resp, req) {
 			return
 		}
 		controller.RegisterAccess(id)
