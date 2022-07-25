@@ -230,10 +230,6 @@ func (o *Options) Identify(req *http.Request) string {
 }
 
 func (o *Options) SkipRegister(resp http.ResponseWriter, req *http.Request) bool {
-	if o.SkipRegisterFunction == nil {
-		return false
-	}
-
 	return o.SkipRegisterFunction(resp, req)
 }
 
@@ -294,6 +290,10 @@ func defaultIdentify(req *http.Request) string {
 	return ip
 }
 
+func defaultSkipRegister(http.ResponseWriter, *http.Request) bool {
+	return false
+}
+
 // Make a key from various parts for use in the key value store
 func makeKey(parts ...string) string {
 	return strings.Join(parts, "_")
@@ -308,6 +308,7 @@ func newOptions(options []*Options) *Options {
 		KeyPrefix:              defaultKeyPrefix,
 		Store:                  nil,
 		Disabled:               defaultDisabled,
+		SkipRegisterFunction:   defaultSkipRegister,
 	}
 
 	// when all defaults, return it
