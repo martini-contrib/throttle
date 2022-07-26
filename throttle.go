@@ -279,10 +279,10 @@ func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, re
 
 		if !o.SkipRegister(resp, req) {
 			controller.RegisterAccess(id)
-		}
 
-		// Set the headers again
-		setRateLimitHeaders(resp, controller, id)
+			// Set the headers again
+			setRateLimitHeaders(resp, controller, id)
+		}
 	}
 }
 
