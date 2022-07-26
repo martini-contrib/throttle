@@ -62,8 +62,8 @@ type Options struct {
 	SkipRegisterFunction func(resp http.ResponseWriter, req *http.Request) bool
 
 	// If this function returns true, the request will not checked for access, the policy will be ignored.
-	// You can set it to provide your own conditions for a request or the response to be allowed, for example to
-	// whitelist an IP address
+	// You can set it to provide your own conditions for a request or the response to be allowed, for example to skip
+	// throttling on an IP allowlist
 	// Note: You can't delay processing here with something like c.Next() until after the request because that will make
 	// the access check to happen after executing the controller handler
 	SkipAccessCheckFunction func(resp http.ResponseWriter, req *http.Request) bool
