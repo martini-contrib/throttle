@@ -264,7 +264,7 @@ func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, re
 		id := makeKey(o.KeyPrefix, quota.KeyId(), o.Identify(req))
 
 		// Already set rate limit headers in case the SkipRegister method calls some delay method like c.Next() and we
-		// can't set the headers again.
+		// might not be able to set the headers again in that case, because the response has already been written.
 		setRateLimitHeaders(resp, controller, id)
 
 		if o.SkipAccessCheck(resp, req) {
@@ -281,7 +281,8 @@ func Policy(quota *Quota, options ...*Options) func(resp http.ResponseWriter, re
 		if !o.SkipRegister(resp, req) {
 			controller.RegisterAccess(id)
 
-			// Set the headers again
+			// Set the headers again because the rate limit values have been changed at this point due to calling
+			// RegisterAccess.
 			setRateLimitHeaders(resp, controller, id)
 		}
 	}
