@@ -58,14 +58,15 @@ type Options struct {
 
 	// If this function returns true, the request will not be counted towards the access count.
 	// You can set it to provide your own conditions for a request to be counted based on the request or the response,
-	// for example to exclude success responses from the count
+	// for example to exclude success responses from the count.
 	SkipRegisterFunction func(resp http.ResponseWriter, req *http.Request) bool
 
-	// If this function returns true, the request will not checked for access, the policy will be ignored.
-	// You can set it to provide your own conditions for a request or the response to be allowed, for example to skip
-	// throttling on an IP allowlist
-	// Note: You can't delay processing here with something like c.Next() until after the request because that will make
-	// the access check to happen after executing the controller handler
+	// If this function returns true, the request will not be checked for access, the policy will be ignored.
+	// You can set it to provide your own conditions for a request or a response to be allowed, for example to skip
+	// throttling on an IP allowlist.
+	// Note: You can't delay processing here with something like c.Next() until after the request, because that will
+	// make the access check to happen after executing the controller handler. Because of this, be aware that resp might
+	// not contain what you want yet.
 	SkipAccessCheckFunction func(resp http.ResponseWriter, req *http.Request) bool
 }
 
